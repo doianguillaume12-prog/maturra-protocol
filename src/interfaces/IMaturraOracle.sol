@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-/// @title  ITempoOracle
-/// @notice Interface for the TEMPO dual-source inflation oracle aggregator
-interface ITempoOracle {
+/// @title  IMaturraOracle
+/// @notice Interface for the MATURRA dual-source inflation oracle aggregator
+interface IMaturraOracle {
     // ── ERRORS ────────────────────────────────────────────────────────────
     error StalePythData(uint256 age, uint256 maxAge);
     error StaleTruflationData(uint256 age, uint256 maxAge);

@@ -10,12 +10,12 @@ import { Base64 }           from "@openzeppelin/contracts/utils/Base64.sol";
 
 // ════════════════════════════════════════════════════════════════════════════
 /// @title  TimeNFT
-/// @notice ERC-721 position token for TEMPO Protocol.
+/// @notice ERC-721 position token for MATURRA Protocol.
 ///         Each token represents one locked capital position with:
 ///           - lockedAmount  : USDC deposited (6 decimals)
 ///           - lockDuration  : seconds of lock
 ///           - inflationBps  : weighted inflation rate at mint (basis points)
-///           - timeValue     : real temporal value captured (18 decimals)
+///           - timeValue     : real maturraral value captured (18 decimals)
 ///           - maturesAt     : unix timestamp when principal can be redeemed
 ///
 /// @dev    Key design decisions:
@@ -25,11 +25,11 @@ import { Base64 }           from "@openzeppelin/contracts/utils/Base64.sol";
 ///            goes offline. This is critical for financial instruments.
 ///
 ///         2. ERC-2981 ROYALTIES — 1% royalty on every secondary transfer,
-///            routed to the BurnRouter which swaps to $TEMPO and burns.
+///            routed to the BurnRouter which swaps to $MATURRA and burns.
 ///            This is the "Flux B" burn engine (secondary market burns).
 ///
 ///         3. SOUL-BOUND UNTIL TRANSFER — NFT is transferable (so it can be
-///            sold on TempoMarket), but redemption requires being the owner
+///            sold on MaturraMarket), but redemption requires being the owner
 ///            at maturity. Buying someone's NFT = buying their locked position.
 ///
 ///         4. MINT/BURN ONLY BY VAULT — prevents any external actor from
@@ -90,7 +90,7 @@ contract TimeNFT is ERC721, ERC721Enumerable, ERC2981, AccessControl {
 
     // ── CONSTRUCTOR ──────────────────────────────────────────────────────────
     constructor(address _vault, address _burnRouter)
-        ERC721("TEMPO Time Position", "tTIME")
+        ERC721("MATURRA Time Position", "tTIME")
     {
         require(_vault      != address(0), "TimeNFT: zero vault");
         require(_burnRouter != address(0), "TimeNFT: zero burnRouter");
@@ -106,12 +106,12 @@ contract TimeNFT is ERC721, ERC721Enumerable, ERC2981, AccessControl {
     // VAULT-ONLY FUNCTIONS
     // ════════════════════════════════════════════════════════════════════════
 
-    /// @notice Mint a new position NFT. Only callable by TempoVault.
+    /// @notice Mint a new position NFT. Only callable by MaturraVault.
     /// @param  to            Recipient of the NFT
     /// @param  lockedAmount  USDC deposited (6 decimals)
     /// @param  lockDuration  Lock period in seconds
     /// @param  inflationBps  Weighted inflation rate at mint
-    /// @param  timeValue     Computed real temporal value (18 decimals, truncated to 128)
+    /// @param  timeValue     Computed real maturraral value (18 decimals, truncated to 128)
     /// @return tokenId       The minted token ID
     function mint(
         address to,
@@ -151,7 +151,7 @@ contract TimeNFT is ERC721, ERC721Enumerable, ERC2981, AccessControl {
     }
 
     /// @notice Mark position as redeemed and burn the NFT.
-    ///         Only callable by TempoVault after maturity check.
+    ///         Only callable by MaturraVault after maturity check.
     /// @param  tokenId   The position to redeem
     /// @param  owner     Must match ownerOf(tokenId) — vault passes this for safety
     function redeem(uint256 tokenId, address owner)
@@ -253,7 +253,7 @@ contract TimeNFT is ERC721, ERC721Enumerable, ERC2981, AccessControl {
             // Top accent line
             '<rect x="0" y="0" width="400" height="2" fill="url(#glow)" rx="1"/>',
             // Logo
-            '<text x="24" y="44" font-family="monospace" font-size="20" font-weight="bold" fill="#00B86B">TEMPO</text>',
+            '<text x="24" y="44" font-family="monospace" font-size="20" font-weight="bold" fill="#00B86B">MATURRA</text>',
             '<text x="100" y="44" font-family="monospace" font-size="11" fill="#3A3A3C" letter-spacing="2">PROTOCOL</text>',
             // Token ID
             '<text x="376" y="44" font-family="monospace" font-size="11" fill="#3A3A3C" text-anchor="end">#',
@@ -268,7 +268,7 @@ contract TimeNFT is ERC721, ERC721Enumerable, ERC2981, AccessControl {
             '</text>',
             '<text x="24" y="148" font-family="monospace" font-size="10" fill="#3A3A3C">USDC</text>',
             // Time Value
-            '<text x="24" y="192" font-family="monospace" font-size="10" fill="#8E8E93" letter-spacing="1">TEMPORAL VALUE</text>',
+            '<text x="24" y="192" font-family="monospace" font-size="10" fill="#8E8E93" letter-spacing="1">MATURRARAL VALUE</text>',
             '<text x="24" y="214" font-family="Arial,sans-serif" font-size="22" font-weight="bold" fill="#00B86B">',
             tvStr,
             ' TIME</text>',
@@ -294,7 +294,7 @@ contract TimeNFT is ERC721, ERC721Enumerable, ERC2981, AccessControl {
             statusStr,
             '</text>',
             // Bottom
-            '<text x="24" y="390" font-family="monospace" font-size="9" fill="#3A3A3C">tempo.finance</text>',
+            '<text x="24" y="390" font-family="monospace" font-size="9" fill="#3A3A3C">maturra.finance</text>',
             '<text x="376" y="390" font-family="monospace" font-size="9" fill="#3A3A3C" text-anchor="end">',
             'MATURES ',
             _formatTimestamp(pos.maturesAt),
@@ -317,12 +317,12 @@ contract TimeNFT is ERC721, ERC721Enumerable, ERC2981, AccessControl {
         );
 
         return string(abi.encodePacked(
-            '{"name":"TEMPO Position #', tokenId.toString(), '",',
-            '"description":"A TEMPO Protocol time position. This NFT represents locked USDC capital whose real temporal value has been computed against live inflation data. The holder can redeem the underlying USDC at maturity.",',
+            '{"name":"MATURRA Position #', tokenId.toString(), '",',
+            '"description":"A MATURRA Protocol time position. This NFT represents locked USDC capital whose real maturraral value has been computed against live inflation data. The holder can redeem the underlying USDC at maturity.",',
             '"image":"', imageData, '",',
             '"attributes":[',
             '{"trait_type":"Locked USDC","value":"', _formatUSDC(pos.lockedAmount), '"},',
-            '{"trait_type":"Temporal Value","value":"', _formatTimeValue(pos.timeValue), '"},',
+            '{"trait_type":"Maturraral Value","value":"', _formatTimeValue(pos.timeValue), '"},',
             '{"trait_type":"Inflation Rate (BPS)","value":', uint256(pos.inflationBps).toString(), '},',
             '{"trait_type":"Lock Duration (days)","value":', (uint256(pos.lockDuration) / 1 days).toString(), '},',
             '{"trait_type":"Matures At","value":', uint256(pos.maturesAt).toString(), '},',

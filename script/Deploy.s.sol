@@ -2,26 +2,26 @@
 pragma solidity ^0.8.24;
 
 import { Script, console2 } from "forge-std/Script.sol";
-import { TempoOracle }      from "../src/TempoOracle.sol";
+import { MaturraOracle }      from "../src/MaturraOracle.sol";
 import { TimeNFT }          from "../src/TimeNFT.sol";
-import { TempoToken }       from "../src/TempoToken.sol";
+import { MaturraToken }       from "../src/MaturraToken.sol";
 import { BurnRouter }       from "../src/BurnRouter.sol";
-import { TempoMarket }      from "../src/TempoMarket.sol";
-import { TempoVault }       from "../src/TempoVault.sol";
+import { MaturraMarket }      from "../src/MaturraMarket.sol";
+import { MaturraVault }       from "../src/MaturraVault.sol";
 
 // ========================================════════════════════════════════════
 /// @title  Deploy
-/// @notice Foundry deployment script for the complete TEMPO Protocol stack.
+/// @notice Foundry deployment script for the complete MATURRA Protocol stack.
 ///
 ///         DEPLOYMENT ORDER (dependency graph):
-///           1. TempoOracle  - no dependencies
-///           2. TempoToken   - needs: dao, burnRouter (circular -> deploy placeholder first)
-///           3. BurnRouter   - needs: usdc, tempoToken, swapRouter, dao
+///           1. MaturraOracle  - no dependencies
+///           2. MaturraToken   - needs: dao, burnRouter (circular -> deploy placeholder first)
+///           3. BurnRouter   - needs: usdc, maturraToken, swapRouter, dao
 ///           4. TimeNFT      - needs: vault (circular -> grant role after vault deploy)
-///           5. TempoVault   - needs: usdc, oracle, timeNFT, burnRouter, treasury, dao
-///           6. TempoMarket  - needs: timeNFT, usdc, dao, guardian
+///           5. MaturraVault   - needs: usdc, oracle, timeNFT, burnRouter, treasury, dao
+///           6. MaturraMarket  - needs: timeNFT, usdc, dao, guardian
 ///           7. Post-deploy  - grant VAULT_ROLE to vault on TimeNFT
-///                          - grant BURN_ROUTER_ROLE to burnRouter on TempoToken
+///                          - grant BURN_ROUTER_ROLE to burnRouter on MaturraToken
 ///
 ///         USAGE:
 ///
@@ -72,12 +72,12 @@ contract Deploy is Script {
     address constant TRUFLATION_FEED  = 0x47Fb2585D2C56Fe188D0E6ec628a38b74fCeeeDf;
 
     // ── DEPLOYED ADDRESSES (populated after deployment) ───────────────────────
-    TempoOracle  public oracle;
-    TempoToken   public tempo;
+    MaturraOracle  public oracle;
+    MaturraToken   public maturra;
     BurnRouter   public burnRouter;
     TimeNFT      public timeNFT;
-    TempoVault   public vault;
-    TempoMarket  public market;
+    MaturraVault   public vault;
+    MaturraMarket  public market;
 
     // ── DEPLOY PARAMS ────────────────────────────────────────────────────────
     address dao;
@@ -130,52 +130,52 @@ contract Deploy is Script {
 
     function _deployAll() internal {
         // ────────────────────────────────────────────────────────────────────
-        // STEP 1 - TempoOracle
+        // STEP 1 - MaturraOracle
         // No dependencies. Deploys immediately.
         // ────────────────────────────────────────────────────────────────────
-        console2.log("1. Deploying TempoOracle...");
-        oracle = new TempoOracle(
+        console2.log("1. Deploying MaturraOracle...");
+        oracle = new MaturraOracle(
             truflationFeed,
             pythAddress,
             dao,       // DAO_ROLE
             dao        // KEEPER_ROLE (DAO runs the keeper initially; can delegate later)
         );
-        console2.log("   TempoOracle:", address(oracle));
+        console2.log("   MaturraOracle:", address(oracle));
 
         // ────────────────────────────────────────────────────────────────────
-        // STEP 2 - TempoToken
-        // Needs burnRouter address - but burnRouter needs tempoToken.
-        // Resolution: deploy TempoToken with a placeholder burnRouter,
+        // STEP 2 - MaturraToken
+        // Needs burnRouter address - but burnRouter needs maturraToken.
+        // Resolution: deploy MaturraToken with a placeholder burnRouter,
         // then grant BURN_ROUTER_ROLE after BurnRouter is deployed.
         // treasury receives the full 1B supply for scheduled distribution.
         // ────────────────────────────────────────────────────────────────────
-        console2.log("2. Deploying TempoToken...");
-        // Temporarily use dao as burnRouter placeholder (we'll grant real role after)
-        tempo = new TempoToken(
+        console2.log("2. Deploying MaturraToken...");
+        // Maturrararily use dao as burnRouter placeholder (we'll grant real role after)
+        maturra = new MaturraToken(
             dao,
             dao,       // placeholder burnRouter - real one granted after step 3
             treasury
         );
-        console2.log("   TempoToken:", address(tempo));
+        console2.log("   MaturraToken:", address(maturra));
 
         // ────────────────────────────────────────────────────────────────────
         // STEP 3 - BurnRouter
-        // Now we have the real tempo address. Deploy BurnRouter.
+        // Now we have the real maturra address. Deploy BurnRouter.
         // ────────────────────────────────────────────────────────────────────
         console2.log("3. Deploying BurnRouter...");
         burnRouter = new BurnRouter(
             usdc,
-            address(tempo),
+            address(maturra),
             uniswapRouter,
             dao
         );
         console2.log("   BurnRouter:", address(burnRouter));
 
-        // Grant BURN_ROUTER_ROLE to the real BurnRouter on TempoToken
+        // Grant BURN_ROUTER_ROLE to the real BurnRouter on MaturraToken
         // This call must come from the DAO (which holds DEFAULT_ADMIN_ROLE)
         // In script context: deployer has admin role initially, then transfers
-        console2.log("   Granting BURN_ROUTER_ROLE to BurnRouter on TempoToken...");
-        tempo.grantRole(keccak256("BURN_ROUTER_ROLE"), address(burnRouter));
+        console2.log("   Granting BURN_ROUTER_ROLE to BurnRouter on MaturraToken...");
+        maturra.grantRole(keccak256("BURN_ROUTER_ROLE"), address(burnRouter));
 
         // ────────────────────────────────────────────────────────────────────
         // STEP 4 - TimeNFT
@@ -184,17 +184,17 @@ contract Deploy is Script {
         // ────────────────────────────────────────────────────────────────────
         console2.log("4. Deploying TimeNFT...");
         timeNFT = new TimeNFT(
-            dao,            // temporary vault placeholder (has DEFAULT_ADMIN_ROLE)
+            dao,            // maturrarary vault placeholder (has DEFAULT_ADMIN_ROLE)
             address(burnRouter)  // royalty receiver -> BurnRouter
         );
         console2.log("   TimeNFT:", address(timeNFT));
 
         // ────────────────────────────────────────────────────────────────────
-        // STEP 5 - TempoVault
+        // STEP 5 - MaturraVault
         // All dependencies now available.
         // ────────────────────────────────────────────────────────────────────
-        console2.log("5. Deploying TempoVault...");
-        vault = new TempoVault(
+        console2.log("5. Deploying MaturraVault...");
+        vault = new MaturraVault(
             usdc,
             address(oracle),
             address(timeNFT),
@@ -203,23 +203,23 @@ contract Deploy is Script {
             dao,
             guardian
         );
-        console2.log("   TempoVault:", address(vault));
+        console2.log("   MaturraVault:", address(vault));
 
         // Grant VAULT_ROLE to the real vault on TimeNFT
-        console2.log("   Granting VAULT_ROLE to TempoVault on TimeNFT...");
+        console2.log("   Granting VAULT_ROLE to MaturraVault on TimeNFT...");
         timeNFT.grantRole(keccak256("VAULT_ROLE"), address(vault));
 
         // ────────────────────────────────────────────────────────────────────
-        // STEP 6 - TempoMarket
+        // STEP 6 - MaturraMarket
         // ────────────────────────────────────────────────────────────────────
-        console2.log("6. Deploying TempoMarket...");
-        market = new TempoMarket(
+        console2.log("6. Deploying MaturraMarket...");
+        market = new MaturraMarket(
             address(timeNFT),
             usdc,
             dao,
             guardian
         );
-        console2.log("   TempoMarket:", address(market));
+        console2.log("   MaturraMarket:", address(market));
 
         // ────────────────────────────────────────────────────────────────────
         // STEP 7 - POST-DEPLOY CONFIGURATION
@@ -231,7 +231,7 @@ contract Deploy is Script {
         // NOTE: Only do this after all role grants are complete
         // timeNFT.renounceRole(timeNFT.DEFAULT_ADMIN_ROLE(), deployer);
 
-        // Phase 0 TVL cap is already set to $500k in TempoVault constructor
+        // Phase 0 TVL cap is already set to $500k in MaturraVault constructor
         // DAO can lift it via vault.setTvlCap() after 90 days
 
         console2.log("   All configuration complete.");
@@ -240,16 +240,16 @@ contract Deploy is Script {
     function _printSummary() internal view {
         console2.log("");
         console2.log("========================================");
-        console2.log("    TEMPO PROTOCOL - DEPLOYMENT SUMMARY");
+        console2.log("    MATURRA PROTOCOL - DEPLOYMENT SUMMARY");
         console2.log("========================================");
         console2.log("");
         console2.log("Core Contracts:");
-        console2.log("  TempoOracle  :", address(oracle));
-        console2.log("  TempoToken   :", address(tempo));
+        console2.log("  MaturraOracle  :", address(oracle));
+        console2.log("  MaturraToken   :", address(maturra));
         console2.log("  BurnRouter   :", address(burnRouter));
         console2.log("  TimeNFT      :", address(timeNFT));
-        console2.log("  TempoVault   :", address(vault));
-        console2.log("  TempoMarket  :", address(market));
+        console2.log("  MaturraVault   :", address(vault));
+        console2.log("  MaturraMarket  :", address(market));
         console2.log("");
         console2.log("External Dependencies:");
         console2.log("  USDC         :", usdc);
@@ -284,8 +284,8 @@ contract Deploy is Script {
             "INVARIANT FAIL: Vault does not have VAULT_ROLE on TimeNFT"
         );
         require(
-            tempo.hasRole(BURN_ROUTER_ROLE, address(burnRouter)),
-            "INVARIANT FAIL: BurnRouter does not have BURN_ROUTER_ROLE on TempoToken"
+            maturra.hasRole(BURN_ROUTER_ROLE, address(burnRouter)),
+            "INVARIANT FAIL: BurnRouter does not have BURN_ROUTER_ROLE on MaturraToken"
         );
         require(
             vault.hasRole(DAO_ROLE, dao),

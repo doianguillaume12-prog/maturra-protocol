@@ -22,8 +22,8 @@ interface ISwapRouter {
         returns (uint256 amountOut);
 }
 
-/// @dev TempoToken burn interface
-interface ITempoToken {
+/// @dev MaturraToken burn interface
+interface IMaturraToken {
     function burn(address from, uint256 amount) external;
     function totalBurned() external view returns (uint256);
 }
@@ -31,22 +31,22 @@ interface ITempoToken {
 // ════════════════════════════════════════════════════════════════════════════
 /// @title  BurnRouter
 /// @notice Receives USDC fees from two sources and converts them into
-///         $TEMPO burns automatically.
+///         $MATURRA burns automatically.
 ///
-///         SOURCE A — TempoVault redemption fees (0.5% on every redemption)
+///         SOURCE A — MaturraVault redemption fees (0.5% on every redemption)
 ///         SOURCE B — TimeNFT royalties (1% on every secondary NFT transfer)
 ///
 ///         FLOW:
 ///           1. USDC arrives (from vault or NFT marketplace royalty)
 ///           2. Accumulated until MIN_SWAP_AMOUNT to save gas
 ///           3. Keeper (or anyone) calls executeBurn()
-///           4. USDC → $TEMPO via Uniswap V4 (slippage-protected)
-///           5. $TEMPO immediately burned → supply decreases permanently
+///           4. USDC → $MATURRA via Uniswap V4 (slippage-protected)
+///           5. $MATURRA immediately burned → supply decreases permanently
 ///           6. BurnExecuted event emitted (transparent on-chain accounting)
 ///
 ///         DESIGN NOTES:
 ///         - No admin can intercept or redirect the USDC. The only output
-///           is $TEMPO burn. This is verifiable by anyone on-chain.
+///           is $MATURRA burn. This is verifiable by anyone on-chain.
 ///         - MIN_SWAP_AMOUNT prevents dust attacks and gas waste.
 ///         - MAX_SLIPPAGE_BPS is DAO-adjustable with a 48h timelock.
 ///         - executeBurn() is callable by anyone — trustless automation.
@@ -66,7 +66,7 @@ contract BurnRouter is AccessControl, ReentrancyGuard {
 
     // ── IMMUTABLES ───────────────────────────────────────────────────────────
     IERC20       public immutable usdc;
-    ITempoToken  public immutable tempo;
+    IMaturraToken  public immutable maturra;
     ISwapRouter  public immutable swapRouter;
 
     // ── STATE ────────────────────────────────────────────────────────────────
@@ -76,8 +76,8 @@ contract BurnRouter is AccessControl, ReentrancyGuard {
 
     // Accounting
     uint256 public totalUsdcReceived;   // cumulative USDC received
-    uint256 public totalUsdcSwapped;    // cumulative USDC swapped to TEMPO
-    uint256 public totalTempoBurned;    // cumulative TEMPO burned via this router
+    uint256 public totalUsdcSwapped;    // cumulative USDC swapped to MATURRA
+    uint256 public totalMaturraBurned;    // cumulative MATURRA burned via this router
     uint256 public totalBurnExecutions; // number of times executeBurn() was called
 
     // ── EVENTS ───────────────────────────────────────────────────────────────
@@ -88,8 +88,8 @@ contract BurnRouter is AccessControl, ReentrancyGuard {
     );
     event BurnExecuted(
         uint256 usdcSwapped,
-        uint256 tempoBurned,
-        uint256 tempoPrice,    // implied price: usdcSwapped / tempoBurned (18 dec)
+        uint256 maturraBurned,
+        uint256 maturraPrice,    // implied price: usdcSwapped / maturraBurned (18 dec)
         uint256 totalBurnedAllTime
     );
     event SlippageUpdateProposed(uint256 newBps, uint256 effectiveAt);
@@ -105,17 +105,17 @@ contract BurnRouter is AccessControl, ReentrancyGuard {
     // ── CONSTRUCTOR ──────────────────────────────────────────────────────────
     constructor(
         address _usdc,
-        address _tempo,
+        address _maturra,
         address _swapRouter,
         address _dao
     ) {
         require(_usdc       != address(0), "BurnRouter: zero usdc");
-        require(_tempo      != address(0), "BurnRouter: zero tempo");
+        require(_maturra      != address(0), "BurnRouter: zero maturra");
         require(_swapRouter != address(0), "BurnRouter: zero router");
         require(_dao        != address(0), "BurnRouter: zero dao");
 
         usdc       = IERC20(_usdc);
-        tempo      = ITempoToken(_tempo);
+        maturra      = IMaturraToken(_maturra);
         swapRouter = ISwapRouter(_swapRouter);
 
         _grantRole(DEFAULT_ADMIN_ROLE, _dao);
@@ -129,7 +129,7 @@ contract BurnRouter is AccessControl, ReentrancyGuard {
     // RECEIVE FUNCTIONS
     // ════════════════════════════════════════════════════════════════════════
 
-    /// @notice Called by TempoVault when distributing redemption fees.
+    /// @notice Called by MaturraVault when distributing redemption fees.
     ///         90% of the 0.5% redemption fee is routed here.
     /// @param  amount USDC amount (6 decimals)
     function receiveVaultFee(uint256 amount) external nonReentrant {
@@ -161,66 +161,66 @@ contract BurnRouter is AccessControl, ReentrancyGuard {
     // CORE BURN EXECUTION — CALLABLE BY ANYONE
     // ════════════════════════════════════════════════════════════════════════
 
-    /// @notice Execute a USDC → TEMPO swap and immediately burn all received TEMPO.
+    /// @notice Execute a USDC → MATURRA swap and immediately burn all received MATURRA.
     ///         Callable by anyone — no privileged access required.
     ///         This enables keeper bots, any user, or automated systems
     ///         to trigger the burn without needing trust.
     ///
-    /// @return tempoBurned Amount of TEMPO tokens destroyed
-    function executeBurn() external nonReentrant returns (uint256 tempoBurned) {
+    /// @return maturraBurned Amount of MATURRA tokens destroyed
+    function executeBurn() external nonReentrant returns (uint256 maturraBurned) {
         uint256 usdcBalance = usdc.balanceOf(address(this));
 
         if (usdcBalance < MIN_SWAP_AMOUNT)
             revert InsufficientBalance(usdcBalance, MIN_SWAP_AMOUNT);
 
-        // Compute minimum TEMPO out (slippage protection)
+        // Compute minimum MATURRA out (slippage protection)
         // In production: query Uniswap TWAP oracle for price
         // Here: amountOutMinimum = 0 for initial deployment, DAO sets it after
         // price discovery. This is safe because:
         //   1. USDC is always going to burn address — MEV can't steal it
-        //   2. Sandwich attacks increase TEMPO price (good for protocol)
+        //   2. Sandwich attacks increase MATURRA price (good for protocol)
         //   3. DAO can set minimum via setMaxSlippage after TGE
         uint256 amountOutMinimum = 0;
 
-        // Execute swap: USDC → TEMPO
+        // Execute swap: USDC → MATURRA
         // Slippage protection: if swap returns less than minimum, revert
-        uint256 tempoReceived;
+        uint256 maturraReceived;
         try swapRouter.exactInputSingle(
             ISwapRouter.ExactInputSingleParams({
                 tokenIn:           address(usdc),
-                tokenOut:          address(tempo),
+                tokenOut:          address(maturra),
                 fee:               POOL_FEE,
-                recipient:         address(this), // TEMPO comes to us first
+                recipient:         address(this), // MATURRA comes to us first
                 amountIn:          usdcBalance,
                 amountOutMinimum:  amountOutMinimum,
                 sqrtPriceLimitX96: 0
             })
         ) returns (uint256 received) {
-            tempoReceived = received;
+            maturraReceived = received;
         } catch {
             revert SwapFailed();
         }
 
-        if (tempoReceived == 0) revert SwapFailed();
+        if (maturraReceived == 0) revert SwapFailed();
 
-        // Immediately burn all received TEMPO
-        tempo.burn(address(this), tempoReceived);
-        tempoBurned = tempoReceived;
+        // Immediately burn all received MATURRA
+        maturra.burn(address(this), maturraReceived);
+        maturraBurned = maturraReceived;
 
         // Update accounting
         totalUsdcSwapped  += usdcBalance;
-        totalTempoBurned  += tempoBurned;
+        totalMaturraBurned  += maturraBurned;
         totalBurnExecutions++;
 
-        // Implied price: usdcBalance (6 dec) / tempoBurned (18 dec)
+        // Implied price: usdcBalance (6 dec) / maturraBurned (18 dec)
         // Normalize to 18 decimals for event
-        uint256 impliedPrice = usdcBalance * 1e12 * 1e18 / tempoBurned;
+        uint256 impliedPrice = usdcBalance * 1e12 * 1e18 / maturraBurned;
 
         emit BurnExecuted(
             usdcBalance,
-            tempoBurned,
+            maturraBurned,
             impliedPrice,
-            totalTempoBurned
+            totalMaturraBurned
         );
     }
 
@@ -280,7 +280,7 @@ contract BurnRouter is AccessControl, ReentrancyGuard {
         return (
             totalUsdcReceived,
             totalUsdcSwapped,
-            totalTempoBurned,
+            totalMaturraBurned,
             totalBurnExecutions
         );
     }

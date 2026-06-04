@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import { AccessControl }  from "@openzeppelin/contracts/access/AccessControl.sol";
-import { ITempoOracle }   from "./interfaces/ITempoOracle.sol";
+import { IMaturraOracle }   from "./interfaces/IMaturraOracle.sol";
 
 // ── EXTERNAL ORACLE INTERFACES ──────────────────────────────────────────────
 
@@ -32,8 +32,8 @@ interface IPythFeed {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-/// @title  TempoOracle
-/// @notice Dual-source inflation oracle aggregator for TEMPO Protocol.
+/// @title  MaturraOracle
+/// @notice Dual-source inflation oracle aggregator for MATURRA Protocol.
 ///         Combines Truflation (70%) and Pyth Network CPI (30%) with
 ///         staleness guards, a circuit breaker, and DAO-adjustable weights.
 ///
@@ -46,7 +46,7 @@ interface IPythFeed {
 ///         - Weight changes require 48h timelock
 ///         - Neither source weight can fall below MIN_WEIGHT
 // ════════════════════════════════════════════════════════════════════════════
-contract TempoOracle is ITempoOracle, AccessControl {
+contract MaturraOracle is IMaturraOracle, AccessControl {
 
     // ── ROLES ────────────────────────────────────────────────────────────────
     bytes32 public constant DAO_ROLE    = keccak256("DAO_ROLE");
@@ -105,7 +105,7 @@ contract TempoOracle is ITempoOracle, AccessControl {
 
     // ── CORE VIEW ────────────────────────────────────────────────────────────
 
-    /// @inheritdoc ITempoOracle
+    /// @inheritdoc IMaturraOracle
     function getWeightedInflation()
         external
         view
@@ -138,7 +138,7 @@ contract TempoOracle is ITempoOracle, AccessControl {
             revert InvalidInflationRate(rate);
     }
 
-    /// @inheritdoc ITempoOracle
+    /// @inheritdoc IMaturraOracle
     function getRawRates()
         external
         view
@@ -154,17 +154,17 @@ contract TempoOracle is ITempoOracle, AccessControl {
         (pythRate,       pythAge)       = _getPythCPI();
     }
 
-    /// @inheritdoc ITempoOracle
+    /// @inheritdoc IMaturraOracle
     function isCircuitBreakerActive() external view override returns (bool) {
         return circuitBreakerActive && block.timestamp < circuitBreakerExpiry;
     }
 
-    /// @inheritdoc ITempoOracle
+    /// @inheritdoc IMaturraOracle
     function circuitBreakerExpiresAt() external view override returns (uint256) {
         return circuitBreakerActive ? circuitBreakerExpiry : 0;
     }
 
-    /// @inheritdoc ITempoOracle
+    /// @inheritdoc IMaturraOracle
     function getWeights()
         external
         view
@@ -268,7 +268,7 @@ contract TempoOracle is ITempoOracle, AccessControl {
         (int256 rawValue, uint256 updatedAt) = truflationFeed.getLatestInflation();
 
         // Truflation can theoretically return negative during deflation
-        // We floor at 0 — TEMPO does not negative-mint
+        // We floor at 0 — MATURRA does not negative-mint
         uint256 absValue = rawValue > 0 ? uint256(rawValue) : 0;
 
         // Convert from 1e18 percentage to BPS: 2.1e18 -> 210 BPS

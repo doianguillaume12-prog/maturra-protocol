@@ -10,7 +10,7 @@ import { Pausable }      from "@openzeppelin/contracts/utils/Pausable.sol";
 import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
 
 // ════════════════════════════════════════════════════════════════════════════
-/// @title  TempoMarket
+/// @title  MaturraMarket
 /// @notice Peer-to-peer marketplace for TimeNFT position tokens.
 ///
 ///         WHY A DEDICATED MARKET:
@@ -19,7 +19,7 @@ import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol"
 ///         Financial NFTs don't trade on art marketplaces because buyers
 ///         need to understand what they're buying, not browse aesthetics.
 ///
-///         TempoMarket gives buyers exactly what they need:
+///         MaturraMarket gives buyers exactly what they need:
 ///           - Position data (locked amount, maturity, inflation rate)
 ///           - Time remaining until redemption
 ///           - Implied yield if buying below face value
@@ -39,7 +39,7 @@ import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol"
 ///           - Emergency pause via DAO
 ///           - No admin can access escrowed NFTs or USDC
 // ════════════════════════════════════════════════════════════════════════════
-contract TempoMarket is ReentrancyGuard, Pausable, AccessControl {
+contract MaturraMarket is ReentrancyGuard, Pausable, AccessControl {
     using SafeERC20 for IERC20;
 
     // ── ROLES ────────────────────────────────────────────────────────────────

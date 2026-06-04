@@ -8,8 +8,8 @@ import { AccessControl }   from "@openzeppelin/contracts/access/AccessControl.so
 import { Nonces }          from "@openzeppelin/contracts/utils/Nonces.sol";
 
 // ════════════════════════════════════════════════════════════════════════════
-/// @title  TempoToken
-/// @notice The $TEMPO governance and value accrual token.
+/// @title  MaturraToken
+/// @notice The $MATURRA governance and value accrual token.
 ///
 ///         DESIGN PRINCIPLES (informed by post-mortem analysis of ve failures
 ///         and Hyperliquid's 93% fee redistribution model):
@@ -38,7 +38,7 @@ import { Nonces }          from "@openzeppelin/contracts/utils/Nonces.sol";
 ///         6. ERC20PERMIT — Gasless approvals. Users can authorize the vault
 ///            or market in a single tx via permit + deposit/buy. Better UX.
 // ════════════════════════════════════════════════════════════════════════════
-contract TempoToken is ERC20, ERC20Permit, ERC20Votes, AccessControl {
+contract MaturraToken is ERC20, ERC20Permit, ERC20Votes, AccessControl {
 
     // ── ROLES ────────────────────────────────────────────────────────────────
     /// @notice BurnRouter role — can call burn() on behalf of the protocol.
@@ -73,12 +73,12 @@ contract TempoToken is ERC20, ERC20Permit, ERC20Votes, AccessControl {
         address burnRouter,
         address treasury
     )
-        ERC20("Tempo Protocol", "TEMPO")
-        ERC20Permit("Tempo Protocol")
+        ERC20("Maturra Protocol", "MATURRA")
+        ERC20Permit("Maturra Protocol")
     {
-        require(dao        != address(0), "TEMPO: zero dao");
-        require(burnRouter != address(0), "TEMPO: zero burnRouter");
-        require(treasury   != address(0), "TEMPO: zero treasury");
+        require(dao        != address(0), "MATURRA: zero dao");
+        require(burnRouter != address(0), "MATURRA: zero burnRouter");
+        require(treasury   != address(0), "MATURRA: zero treasury");
 
         _grantRole(DEFAULT_ADMIN_ROLE, dao);
         _grantRole(BURN_ROUTER_ROLE,   burnRouter);
@@ -96,7 +96,7 @@ contract TempoToken is ERC20, ERC20Permit, ERC20Votes, AccessControl {
 
     /// @notice Burn tokens from an account.
     ///         Callable by:
-    ///           - BURN_ROUTER_ROLE (BurnRouter after swapping fees → TEMPO)
+    ///           - BURN_ROUTER_ROLE (BurnRouter after swapping fees → MATURRA)
     ///           - The token holder themselves (voluntary burn)
     ///
     /// @param  from    Address whose tokens to burn
@@ -114,7 +114,7 @@ contract TempoToken is ERC20, ERC20Permit, ERC20Votes, AccessControl {
             revert BurnExceedsBalance(amount, balance);
 
         // If BurnRouter is burning from its own balance (standard flow):
-        // BurnRouter receives TEMPO from swap, then calls burn(address(this), amount)
+        // BurnRouter receives MATURRA from swap, then calls burn(address(this), amount)
         _burn(from, amount);
 
         _totalBurned += amount;
@@ -135,7 +135,7 @@ contract TempoToken is ERC20, ERC20Permit, ERC20Votes, AccessControl {
     // ════════════════════════════════════════════════════════════════════════
 
     /// @notice Delegate voting power to self (required before voting).
-    ///         Call this once after receiving TEMPO tokens.
+    ///         Call this once after receiving MATURRA tokens.
     function selfDelegate() external {
         _delegate(msg.sender, msg.sender);
     }
@@ -144,7 +144,7 @@ contract TempoToken is ERC20, ERC20Permit, ERC20Votes, AccessControl {
     // VIEWS
     // ════════════════════════════════════════════════════════════════════════
 
-    /// @notice Total TEMPO burned since genesis. Only ever increases.
+    /// @notice Total MATURRA burned since genesis. Only ever increases.
     function totalBurned() external view returns (uint256) {
         return _totalBurned;
     }

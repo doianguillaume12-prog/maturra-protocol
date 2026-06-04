@@ -4,12 +4,12 @@ pragma solidity ^0.8.24;
 import { Test, console2 } from "forge-std/Test.sol";
 
 // Import all contracts
-import { TempoOracle }  from "../src/TempoOracle.sol";
+import { MaturraOracle }  from "../src/MaturraOracle.sol";
 import { TimeNFT }      from "../src/TimeNFT.sol";
-import { TempoToken }   from "../src/TempoToken.sol";
+import { MaturraToken }   from "../src/MaturraToken.sol";
 import { BurnRouter }   from "../src/BurnRouter.sol";
-import { TempoMarket }  from "../src/TempoMarket.sol";
-import { TempoVault }   from "../src/TempoVault.sol";
+import { MaturraMarket }  from "../src/MaturraMarket.sol";
+import { MaturraVault }   from "../src/MaturraVault.sol";
 import { IERC20 }       from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { ERC20 }        from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
@@ -44,14 +44,14 @@ contract TestOracle {
     function getWeights() external pure returns (uint256,uint256) { return (70, 30); }
 }
 
-/// @dev Mock Uniswap router - simulates USDC -> TEMPO swap at 1:1 rate for testing
+/// @dev Mock Uniswap router - simulates USDC -> MATURRA swap at 1:1 rate for testing
 contract TestSwapRouter {
     TestUSDC  public usdc;
-    TempoToken public tempo;
+    MaturraToken public maturra;
 
-    constructor(address _usdc, address _tempo) {
+    constructor(address _usdc, address _maturra) {
         usdc  = TestUSDC(_usdc);
-        tempo = TempoToken(_tempo);
+        maturra = MaturraToken(_maturra);
     }
 
     struct ExactInputSingleParams {
@@ -64,7 +64,7 @@ contract TestSwapRouter {
         uint160 sqrtPriceLimitX96;
     }
 
-    /// @dev Simulates a 1 USDC = 10 TEMPO swap (simplified for testing)
+    /// @dev Simulates a 1 USDC = 10 MATURRA swap (simplified for testing)
     function exactInputSingle(ExactInputSingleParams calldata params)
         external
         returns (uint256 amountOut)
@@ -72,20 +72,20 @@ contract TestSwapRouter {
         // Pull USDC from caller
         usdc.transferFrom(msg.sender, address(this), params.amountIn);
 
-        // Give TEMPO to recipient (10x rate for easy math in tests)
+        // Give MATURRA to recipient (10x rate for easy math in tests)
         // In production: real Uniswap pool determines the rate
-        amountOut = params.amountIn * 10 * 1e12; // USDC 6dec -> TEMPO 18dec, 10x
+        amountOut = params.amountIn * 10 * 1e12; // USDC 6dec -> MATURRA 18dec, 10x
 
-        // Mint test TEMPO (in production, pool has real TEMPO liquidity)
-        // This requires tempo to allow minting - in real deployment, pool holds TEMPO
-        // For tests: we pre-fund the router with TEMPO
-        tempo.transfer(params.recipient, amountOut);
+        // Mint test MATURRA (in production, pool has real MATURRA liquidity)
+        // This requires maturra to allow minting - in real deployment, pool holds MATURRA
+        // For tests: we pre-fund the router with MATURRA
+        maturra.transfer(params.recipient, amountOut);
     }
 }
 
 // ========================================════════════════════════════════════
 /// @title  IntegrationTest
-/// @notice End-to-end tests of the complete TEMPO Protocol stack.
+/// @notice End-to-end tests of the complete MATURRA Protocol stack.
 ///         Deploys all real contracts (not mocks for the protocol contracts)
 ///         and exercises the full user journey.
 // ========================================════════════════════════════════════
@@ -94,10 +94,10 @@ contract IntegrationTest is Test {
     // Protocol contracts
     TestOracle   oracle;
     TimeNFT      nft;
-    TempoToken   tempo;
+    MaturraToken   maturra;
     BurnRouter   burnRouter;
-    TempoMarket  market;
-    TempoVault   vault;
+    MaturraMarket  market;
+    MaturraVault   vault;
 
     // Test infrastructure
     TestUSDC       usdc;
@@ -122,33 +122,33 @@ contract IntegrationTest is Test {
         usdc   = new TestUSDC();
         oracle = new TestOracle();
 
-        // Deploy TempoToken first (treasury gets all supply)
-        tempo = new TempoToken(dao, dao, dao); // dao as placeholder burnRouter
+        // Deploy MaturraToken first (treasury gets all supply)
+        maturra = new MaturraToken(dao, dao, dao); // dao as placeholder burnRouter
 
-        // Deploy swap router mock (needs tempo to give to callers)
-        swapRouter = new TestSwapRouter(address(usdc), address(tempo));
+        // Deploy swap router mock (needs maturra to give to callers)
+        swapRouter = new TestSwapRouter(address(usdc), address(maturra));
 
-        // Fund swap router with TEMPO for test swaps
+        // Fund swap router with MATURRA for test swaps
         vm.prank(dao);
-        tempo.transfer(address(swapRouter), 500_000_000 * 1e18);
+        maturra.transfer(address(swapRouter), 500_000_000 * 1e18);
 
         // Deploy BurnRouter
         burnRouter = new BurnRouter(
             address(usdc),
-            address(tempo),
+            address(maturra),
             address(swapRouter),
             dao
         );
 
         // Grant real BURN_ROUTER_ROLE
         vm.prank(dao);
-        tempo.grantRole(keccak256("BURN_ROUTER_ROLE"), address(burnRouter));
+        maturra.grantRole(keccak256("BURN_ROUTER_ROLE"), address(burnRouter));
 
         // Deploy TimeNFT (dao as vault placeholder)
         nft = new TimeNFT(dao, address(burnRouter));
 
         // Deploy Vault
-        vault = new TempoVault(
+        vault = new MaturraVault(
             address(usdc),
             address(oracle),
             address(nft),
@@ -165,7 +165,7 @@ contract IntegrationTest is Test {
         vm.stopPrank();
 
         // Deploy Market
-        market = new TempoMarket(
+        market = new MaturraMarket(
             address(nft),
             address(usdc),
             dao,
@@ -310,7 +310,7 @@ contract IntegrationTest is Test {
         // All mature
         vm.warp(block.timestamp + ONE_80D + 1 seconds);
 
-        uint256 tempoBefore = tempo.totalSupply();
+        uint256 maturraBefore = maturra.totalSupply();
 
         // All redeem
         vm.prank(alice); vault.redeemPosition(id1);
@@ -326,17 +326,17 @@ contract IntegrationTest is Test {
         // Give BurnRouter approval to spend USDC from itself (already approved via constructor)
         // Keeper executes the burn
         vm.prank(keeper);
-        uint256 tempoBurned = burnRouter.executeBurn();
+        uint256 maturraBurned = burnRouter.executeBurn();
 
-        uint256 tempoAfter = tempo.totalSupply();
+        uint256 maturraAfter = maturra.totalSupply();
 
-        console2.log("TEMPO burned:", tempoBurned / 1e18);
-        assertGt(tempoBurned, 0, "Should have burned TEMPO");
-        assertLt(tempoAfter, tempoBefore, "TEMPO supply should decrease");
-        assertEq(tempo.totalBurned(), tempoBurned, "totalBurned should track correctly");
+        console2.log("MATURRA burned:", maturraBurned / 1e18);
+        assertGt(maturraBurned, 0, "Should have burned MATURRA");
+        assertLt(maturraAfter, maturraBefore, "MATURRA supply should decrease");
+        assertEq(maturra.totalBurned(), maturraBurned, "totalBurned should track correctly");
 
         console2.log(" Journey 3 complete - Supply went from",
-            tempoBefore / 1e18, "to", tempoAfter / 1e18);
+            maturraBefore / 1e18, "to", maturraAfter / 1e18);
     }
 
     // ========================================════════════════════════════════
@@ -418,7 +418,7 @@ contract IntegrationTest is Test {
         // Bob (not owner) tries to redeem Alice's position
         vm.prank(bob);
         vm.expectRevert(
-            abi.encodeWithSelector(TempoVault.NotNFTOwner.selector, tokenId, bob)
+            abi.encodeWithSelector(MaturraVault.NotNFTOwner.selector, tokenId, bob)
         );
         vault.redeemPosition(tokenId);
 
@@ -430,8 +430,8 @@ contract IntegrationTest is Test {
     // ========================================════════════════════════════════
 
     function test_economic_deflationary_pressure() public {
-        uint256 initialSupply = tempo.totalSupply();
-        console2.log("Initial TEMPO supply:", initialSupply / 1e18);
+        uint256 initialSupply = maturra.totalSupply();
+        console2.log("Initial MATURRA supply:", initialSupply / 1e18);
 
         // 10 deposits and redeems
         for (uint256 i = 0; i < 10; i++) {
@@ -449,9 +449,9 @@ contract IntegrationTest is Test {
             burnRouter.executeBurn();
         }
 
-        uint256 finalSupply = tempo.totalSupply();
-        console2.log("Final TEMPO supply:", finalSupply / 1e18);
-        console2.log("TEMPO burned:", (initialSupply - finalSupply) / 1e18);
+        uint256 finalSupply = maturra.totalSupply();
+        console2.log("Final MATURRA supply:", finalSupply / 1e18);
+        console2.log("MATURRA burned:", (initialSupply - finalSupply) / 1e18);
 
         assertLt(finalSupply, initialSupply, "Supply must decrease after burns");
         console2.log(" Deflationary pressure confirmed");

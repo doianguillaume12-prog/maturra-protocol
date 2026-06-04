@@ -1,0 +1,11 @@
+# Secrets — JAMAIS sur GitHub
+.env
+.env.*
+
+# Foundry build & cache — fichiers générés, inutiles à versionner
+out/
+cache/
+broadcast/
+
+# Divers
+.DS_Store

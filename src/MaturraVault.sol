@@ -10,7 +10,7 @@ import { AccessControl }   from "@openzeppelin/contracts/access/AccessControl.so
 import { Pausable }        from "@openzeppelin/contracts/utils/Pausable.sol";
 import { Math }            from "@openzeppelin/contracts/utils/math/Math.sol";
 
-import { ITempoOracle }    from "./interfaces/ITempoOracle.sol";
+import { IMaturraOracle }    from "./interfaces/IMaturraOracle.sol";
 
 // ── MINIMAL INTERFACES ───────────────────────────────────────────────────────
 
@@ -54,11 +54,11 @@ interface IBurnRouter {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-/// @title  TempoVault — v2
-/// @notice Core vault for TEMPO Protocol.
+/// @title  MaturraVault — v2
+/// @notice Core vault for MATURRA Protocol.
 ///
 ///         WHAT CHANGED FROM v1:
-///         - Removed $TEMPO burn at deposit (eliminated circular dependency)
+///         - Removed $MATURRA burn at deposit (eliminated circular dependency)
 ///         - Removed ERC-20 $TIME minting → replaced by TimeNFT.mint()
 ///         - Added redemption fee (0.5%) routed to BurnRouter
 ///         - Multi-position support via NFT tokenIds (one NFT per deposit)
@@ -75,7 +75,7 @@ interface IBurnRouter {
 ///             1. NFT owner calls redeem(tokenId)
 ///             2. Maturity check via TimeNFT.isMatured()
 ///             3. 0.5% redemption fee deducted
-///             4. Fee: 90% → BurnRouter (will swap→burn $TEMPO)
+///             4. Fee: 90% → BurnRouter (will swap→burn $MATURRA)
 ///             5. Fee: 10% → Treasury
 ///             6. Principal + accrued yield → NFT owner
 ///             7. TimeNFT burned
@@ -87,7 +87,7 @@ interface IBurnRouter {
 ///           - Emergency pause (guardian fast, DAO to unpause)
 ///           - _decimalsOffset = 6 prevents ERC-4626 inflation attack
 // ════════════════════════════════════════════════════════════════════════════
-contract TempoVault is ERC4626, ReentrancyGuard, AccessControl, Pausable {
+contract MaturraVault is ERC4626, ReentrancyGuard, AccessControl, Pausable {
     using SafeERC20 for IERC20;
     using Math      for uint256;
 
@@ -106,7 +106,7 @@ contract TempoVault is ERC4626, ReentrancyGuard, AccessControl, Pausable {
     uint256 public constant DAYS_PER_YEAR    = 365;
 
     // ── IMMUTABLES ───────────────────────────────────────────────────────────
-    ITempoOracle public immutable oracle;
+    IMaturraOracle public immutable oracle;
     ITimeNFT     public immutable timeNFT;
     IBurnRouter  public immutable burnRouter;
     IERC20       public immutable usdc;
@@ -170,7 +170,7 @@ contract TempoVault is ERC4626, ReentrancyGuard, AccessControl, Pausable {
         address _guardian
     )
         ERC4626(IERC20(_usdc))
-        ERC20("TEMPO Vault Share", "vTEMPO")
+        ERC20("MATURRA Vault Share", "vMATURRA")
     {
         require(_usdc       != address(0), "Vault: zero usdc");
         require(_oracle     != address(0), "Vault: zero oracle");
@@ -181,7 +181,7 @@ contract TempoVault is ERC4626, ReentrancyGuard, AccessControl, Pausable {
         require(_guardian   != address(0), "Vault: zero guardian");
 
         usdc       = IERC20(_usdc);
-        oracle     = ITempoOracle(_oracle);
+        oracle     = IMaturraOracle(_oracle);
         timeNFT    = ITimeNFT(_timeNFT);
         burnRouter = IBurnRouter(_burnRouter);
         treasury   = _treasury;
@@ -196,14 +196,14 @@ contract TempoVault is ERC4626, ReentrancyGuard, AccessControl, Pausable {
     // ════════════════════════════════════════════════════════════════════════
 
     /// @notice Deposit USDC, lock it for a duration, receive a TimeNFT
-    ///         representing your position's real temporal value.
+    ///         representing your position's real maturraral value.
     ///
     /// @param  assets        USDC amount to deposit (6 decimals)
     /// @param  nftRecipient  Address to receive the TimeNFT (can be different from depositor)
     /// @param  lockDuration  Lock period in seconds (7 days → 4 years)
     ///
     /// @return tokenId  The minted TimeNFT token ID
-    /// @return timeValue  Real temporal value captured (18 decimals)
+    /// @return timeValue  Real maturraral value captured (18 decimals)
     function depositAndMintNFT(
         uint256 assets,
         address nftRecipient,
@@ -237,7 +237,7 @@ contract TempoVault is ERC4626, ReentrancyGuard, AccessControl, Pausable {
         // ── 4. PULL USDC FROM DEPOSITOR (CEI — external call first) ─────────
         usdc.safeTransferFrom(msg.sender, address(this), assets);
 
-        // ── 5. COMPUTE TEMPORAL VALUE ────────────────────────────────────────
+        // ── 5. COMPUTE MATURRARAL VALUE ────────────────────────────────────────
         //
         //   timeValue = assets(USDC, 6 dec) × inflationBps × lockDuration
         //               ──────────────────────────────────────────────────
@@ -250,7 +250,7 @@ contract TempoVault is ERC4626, ReentrancyGuard, AccessControl, Pausable {
         //            10_000 × 365 × 86_400
         //
         //   = 10_000e6 × 228 × 15_552_000 × 1e12 / (10_000 × 31_536_000)
-        //   ≈ 11.22e18 TIME units (representing $11.22 of temporal value)
+        //   ≈ 11.22e18 TIME units (representing $11.22 of maturraral value)
         //
         timeValue = (assets * inflationBps * lockDuration * 1e12)
                     / (BPS * DAYS_PER_YEAR * 1 days);
@@ -374,7 +374,7 @@ contract TempoVault is ERC4626, ReentrancyGuard, AccessControl, Pausable {
         // ── 10. DISTRIBUTE FEES ───────────────────────────────────────────────
         //
         //   BurnRouter fee: approve + call receiveVaultFee()
-        //   The BurnRouter will accumulate and swap to $TEMPO then burn.
+        //   The BurnRouter will accumulate and swap to $MATURRA then burn.
         //
         if (burnRouterAmt > 0) {
             IERC20(asset()).transfer(address(burnRouter), burnRouterAmt);

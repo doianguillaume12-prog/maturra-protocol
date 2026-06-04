@@ -2,8 +2,8 @@
 pragma solidity ^0.8.24;
 
 import { Test, console2 } from "forge-std/Test.sol";
-import { TempoVault }     from "../src/TempoVault.sol";
-import { ITempoOracle }   from "../src/interfaces/ITempoOracle.sol";
+import { MaturraVault }     from "../src/MaturraVault.sol";
+import { IMaturraOracle }   from "../src/interfaces/IMaturraOracle.sol";
 import { IERC20 }         from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { ERC20 }          from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { ERC721 }         from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
@@ -29,7 +29,7 @@ contract MockOracle {
     function isCircuitBreakerActive() external view returns (bool) { return frozen; }
     function setRate(uint256 r)    external { rate = r; }
     function setFrozen(bool f)     external { frozen = f; }
-    // satisfy ITempoOracle interface
+    // satisfy IMaturraOracle interface
     function getRawRates() external view returns (uint256,uint256,uint256,uint256) { return(rate,rate,0,0); }
     function circuitBreakerExpiresAt() external view returns (uint256) { return 0; }
     function getWeights() external pure returns (uint256,uint256) { return (70,30); }
@@ -115,9 +115,9 @@ contract MockBurnRouter {
 // ════════════════════════════════════════════════════════════════════════════
 // TESTS
 // ════════════════════════════════════════════════════════════════════════════
-contract TempoVaultTest is Test {
+contract MaturraVaultTest is Test {
 
-    TempoVault    vault;
+    MaturraVault    vault;
     MockUSDC      usdc;
     MockOracle    oracle;
     MockTimeNFT   nft;
@@ -140,7 +140,7 @@ contract TempoVaultTest is Test {
         nft        = new MockTimeNFT();
         burnRouter = new MockBurnRouter(address(usdc));
 
-        vault = new TempoVault(
+        vault = new MaturraVault(
             address(usdc),
             address(oracle),
             address(nft),
@@ -311,12 +311,12 @@ contract TempoVaultTest is Test {
     }
 
     function test_buyer_can_redeem_purchased_nft() public {
-        // Alice deposits, Bob buys the NFT on TempoMarket (simulated by direct transfer)
+        // Alice deposits, Bob buys the NFT on MaturraMarket (simulated by direct transfer)
         vm.prank(alice);
         (uint256 tokenId,) = vault.depositAndMintNFT(TEN_K, alice, ONE_80D);
 
         // Simulate NFT sale: alice transfers to bob
-        // In practice this goes via TempoMarket
+        // In practice this goes via MaturraMarket
         vm.prank(alice);
         // Note: needs ERC-721 approve/transfer — MockTimeNFT simplified this
         // Just update ownership in the mock
@@ -337,7 +337,7 @@ contract TempoVaultTest is Test {
     function test_revert_deposit_too_small() public {
         vm.prank(alice);
         vm.expectRevert(
-            abi.encodeWithSelector(TempoVault.DepositTooSmall.selector, 99e6, 100e6)
+            abi.encodeWithSelector(MaturraVault.DepositTooSmall.selector, 99e6, 100e6)
         );
         vault.depositAndMintNFT(99e6, alice, ONE_80D);
     }
@@ -357,7 +357,7 @@ contract TempoVaultTest is Test {
     function test_revert_oracle_frozen() public {
         oracle.setFrozen(true);
         vm.prank(alice);
-        vm.expectRevert(TempoVault.OracleFrozen.selector);
+        vm.expectRevert(MaturraVault.OracleFrozen.selector);
         vault.depositAndMintNFT(TEN_K, alice, ONE_80D);
     }
 
@@ -367,7 +367,7 @@ contract TempoVaultTest is Test {
 
         // Try to redeem immediately — not matured
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(TempoVault.NotMatured.selector, tokenId));
+        vm.expectRevert(abi.encodeWithSelector(MaturraVault.NotMatured.selector, tokenId));
         vault.redeemPosition(tokenId);
     }
 
@@ -380,7 +380,7 @@ contract TempoVaultTest is Test {
         // Bob tries to redeem Alice's position
         vm.prank(bob);
         vm.expectRevert(
-            abi.encodeWithSelector(TempoVault.NotNFTOwner.selector, tokenId, bob)
+            abi.encodeWithSelector(MaturraVault.NotNFTOwner.selector, tokenId, bob)
         );
         vault.redeemPosition(tokenId);
     }

@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /// @title  ITimeToken
-/// @notice Interface for the $TIME temporal value token
+/// @notice Interface for the $TIME maturraral value token
 interface ITimeToken is IERC20 {
     // ── STRUCTS ───────────────────────────────────────────────────────────
     struct LockMetadata {
