@@ -3,6 +3,8 @@ pragma solidity ^0.8.24;
 
 import { AccessControl }  from "@openzeppelin/contracts/access/AccessControl.sol";
 import { IMaturraOracle }   from "./interfaces/IMaturraOracle.sol";
+import { IPyth }            from "@pythnetwork/pyth-sdk-solidity/IPyth.sol";
+import { PythStructs }      from "@pythnetwork/pyth-sdk-solidity/PythStructs.sol";
 
 // ── EXTERNAL ORACLE INTERFACES ──────────────────────────────────────────────
 
@@ -15,20 +17,6 @@ interface ITruflationFeed {
             int256 value,       // inflation in 1e18 (e.g. 2.1e18 = 2.1%)
             uint256 updatedAt   // unix timestamp
         );
-}
-
-/// @dev Pyth Network interface (simplified — matches IPyth)
-interface IPythFeed {
-    struct Price {
-        int64  price;
-        uint64 conf;
-        int32  expo;
-        uint   publishTime;
-    }
-    function getPriceNoOlderThan(bytes32 id, uint age)
-        external
-        view
-        returns (Price memory price);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -53,22 +41,24 @@ contract MaturraOracle is IMaturraOracle, AccessControl {
     bytes32 public constant KEEPER_ROLE = keccak256("KEEPER_ROLE");
 
     // ── CONSTANTS ────────────────────────────────────────────────────────────
-    uint256 public constant STALENESS_LIMIT    = 26 hours;
-    uint256 public constant MAX_DIVERGENCE_BPS = 150;  // 1.5%
-    uint256 public constant FREEZE_DURATION    = 24 hours;
-    uint256 public constant WEIGHT_TIMELOCK    = 48 hours;
-    uint256 public constant MIN_WEIGHT         = 20;   // neither source < 20%
-    uint256 public constant MAX_INFLATION_BPS  = 2000; // 20% sanity cap
-    uint256 public constant WEIGHT_TOTAL       = 100;
+    uint256 public constant STALENESS_LIMIT     = 26 hours;
+    // CPI data is published monthly — 40 days covers the longest release cycles
+    uint256 public constant CPI_STALENESS_LIMIT = 40 days;
+    uint256 public constant MAX_DIVERGENCE_BPS  = 150;  // 1.5%
+    uint256 public constant FREEZE_DURATION     = 24 hours;
+    uint256 public constant WEIGHT_TIMELOCK     = 48 hours;
+    uint256 public constant MIN_WEIGHT          = 20;   // neither source < 20%
+    uint256 public constant MAX_INFLATION_BPS   = 2000; // 20% sanity cap
+    uint256 public constant WEIGHT_TOTAL        = 100;
 
     // ── PYTH FEED IDs ────────────────────────────────────────────────────────
-    // Official Pyth price feed IDs for US macroeconomic data (Sept 2025)
-    bytes32 public constant PYTH_CPI_ID = bytes32(uint256(0x89bba8c1ad5e5ea7e8dc30d1b4f4a9a50d6c0bcd3d8f1e5a7c2b4d6e8f0a100));
-    bytes32 public constant PYTH_PCE_ID = bytes32(uint256(0x12a3b4c5d6e7f8091a2b3c4d5e6f7081920a1b2c3d4e5f6071829304a5b6c00));
+    // ECO.US.CPIRATEY — US CPI 12-month change (annualized %)
+    bytes32 public constant PYTH_CPI_ID =
+        0x3c35e93113a975ab62428bcf92c6fa11d383438904aa38a79e506afac814688e;
 
     // ── STATE ────────────────────────────────────────────────────────────────
     ITruflationFeed public immutable truflationFeed;
-    IPythFeed       public immutable pythFeed;
+    IPyth           public immutable pythFeed;
 
     // Weights — stored as integers summing to 100
     uint256 public truflationWeight = 70;
@@ -96,7 +86,7 @@ contract MaturraOracle is IMaturraOracle, AccessControl {
         require(_dao            != address(0), "Oracle: zero dao");
 
         truflationFeed = ITruflationFeed(_truflationFeed);
-        pythFeed       = IPythFeed(_pythFeed);
+        pythFeed       = IPyth(_pythFeed);
 
         _grantRole(DEFAULT_ADMIN_ROLE, _dao);
         _grantRole(DAO_ROLE,    _dao);
@@ -127,8 +117,8 @@ contract MaturraOracle is IMaturraOracle, AccessControl {
         // 3. Staleness guards
         if (truflAge > STALENESS_LIMIT)
             revert StaleTruflationData(truflAge, STALENESS_LIMIT);
-        if (pythAge > STALENESS_LIMIT)
-            revert StalePythData(pythAge, STALENESS_LIMIT);
+        if (pythAge > CPI_STALENESS_LIMIT)
+            revert StalePythData(pythAge, CPI_STALENESS_LIMIT);
 
         // 4. Weighted average
         rate = (truflBps * truflationWeight + pythBps * pythWeight) / WEIGHT_TOTAL;
@@ -184,8 +174,8 @@ contract MaturraOracle is IMaturraOracle, AccessControl {
         (uint256 truflBps, uint256 truflAge) = _getTruflation();
         (uint256 pythBps,  uint256 pythAge)  = _getPythCPI();
 
-        require(truflAge <= STALENESS_LIMIT, "Oracle: truflation stale");
-        require(pythAge  <= STALENESS_LIMIT, "Oracle: pyth stale");
+        require(truflAge <= STALENESS_LIMIT,     "Oracle: truflation stale");
+        require(pythAge  <= CPI_STALENESS_LIMIT, "Oracle: pyth stale");
 
         uint256 newRate =
             (truflBps * truflationWeight + pythBps * pythWeight) / WEIGHT_TOTAL;
@@ -282,15 +272,16 @@ contract MaturraOracle is IMaturraOracle, AccessControl {
 
     /// @dev Fetch Pyth CPI rate and convert to BPS.
     ///      Pyth returns a Price struct with expo (e.g. price=270, expo=-2 = 2.70%).
+    ///      CPI data is monthly so we allow up to CPI_STALENESS_LIMIT (40 days).
     function _getPythCPI()
         internal
         view
         returns (uint256 rateBps, uint256 age)
     {
-        // Request price no older than STALENESS_LIMIT
-        IPythFeed.Price memory p = pythFeed.getPriceNoOlderThan(
+        // Request price no older than CPI_STALENESS_LIMIT (monthly data)
+        PythStructs.Price memory p = pythFeed.getPriceNoOlderThan(
             PYTH_CPI_ID,
-            STALENESS_LIMIT
+            CPI_STALENESS_LIMIT
         );
 
         // Convert Pyth price to BPS
